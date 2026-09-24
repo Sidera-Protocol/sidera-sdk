@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { hash, Keypair, StrKey, xdr } from "@stellar/stellar-sdk";
+import { Address, hash, Keypair, StrKey, xdr } from "@stellar/stellar-sdk";
 import { SideraClient } from "../src/client.js";
 import { InvalidNameError, NameNotFoundError, NameTakenError, SideraError } from "../src/errors.js";
 import type { SideraConfig } from "../src/types.js";
@@ -38,15 +38,23 @@ function makeClient(): { client: SideraClient; server: any } {
   return { client, server };
 }
 
-/** Build a real ScVal map retval shaped like the contract's Resolution. */
+/**
+ * Build an ScVal retval shaped EXACTLY like the live contract's
+ * `Resolution::Record` variant: a Tag-wrapped enum map with Symbol keys,
+ * real Address ScVals, and the `Option<String>` memo as a 0/1-element vec.
+ * (Regression guard: the live-testnet dry run crashed decoding the old
+ * fixture's string keys / fabricated owner field.)
+ */
 function resolutionScVal(memo: string | null) {
+  const sym = (s: string) => xdr.ScVal.scvSymbol(s);
   const entry = (k: string, v: xdr.ScVal) =>
-    new xdr.ScMapEntry({ key: xdr.ScVal.scvString(k), val: v });
-  return xdr.ScVal.scvMap([
-    entry("address", xdr.ScVal.scvString(OWNER)),
-    entry("owner", xdr.ScVal.scvString(OTHER)),
+    new xdr.ScMapEntry({ key: sym(k), val: v });
+  const record = xdr.ScVal.scvMap([
+    entry("address", new Address(OWNER).toScVal()),
     entry("memo", memo == null ? xdr.ScVal.scvVec([]) : xdr.ScVal.scvVec([xdr.ScVal.scvString(memo)])),
   ]);
+  // Enum variant wrapper: { Tag: "Record", val: { address, memo } }
+  return xdr.ScVal.scvMap([new xdr.ScMapEntry({ key: sym("Tag"), val: sym("Record") }), new xdr.ScMapEntry({ key: sym("val"), val: record })]);
 }
 
 describe("SideraClient construction", () => {
@@ -156,7 +164,7 @@ describe("response decoding and error mapping", () => {
     await expect(client.resolve("taken")).rejects.toBeInstanceOf(NameTakenError);
   });
 
-  it("decodes a full resolution record: address, owner, and parsed memo", async () => {
+  it("decodes a live-chain-shaped resolution record: address and parsed memo", async () => {
     const { client, server } = makeClient();
     server.simulateTransaction.mockResolvedValue({
       result: { retval: resolutionScVal("1029384756") },
@@ -165,7 +173,6 @@ describe("response decoding and error mapping", () => {
     const res = await client.resolve("alice");
     expect(res.fullName).toBe("alice.sid");
     expect(res.address).toBe(OWNER);
-    expect(res.owner).toBe(OTHER);
     expect(res.memo).toEqual({ type: "id", value: "1029384756" });
   });
 
@@ -178,6 +185,18 @@ describe("response decoding and error mapping", () => {
     const res = await client.resolve("alice");
     expect(res.memo).toBeNull();
     expect(res.address).toBe(OWNER);
+  });
+
+  it("decodes Symbol map keys and unwraps the enum Tag wrapper (live-chain parity)", async () => {
+    const { client, server } = makeClient();
+    server.simulateTransaction.mockResolvedValue({
+      result: { retval: resolutionScVal(null) },
+    });
+
+    // The fixture IS the Tag/Symbol shape; a successful resolve here is
+    // the regression guard. Also confirm addresses decode to strkeys.
+    const res = await client.resolve("alice");
+    expect(res.address).toMatch(/^G[A-Z2-7]{55}$/);
   });
 
   it("treats a void retval as NameNotFound", async () => {

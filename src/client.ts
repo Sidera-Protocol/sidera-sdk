@@ -47,9 +47,12 @@ const DEFAULT_MAINNET_RPC = "https://soroban-rpc.stellar.org";
 const SIMULATION_SOURCE = Keypair.random().publicKey();
 
 /** stellar-base's stale d.ts lacks the modern Address class; retype locally. */
-const AddressC = Address as unknown as new (value: string) => {
+type AddressLike = {
   toScVal(): xdr.ScVal;
   toString(): string;
+};
+const AddressC = Address as unknown as (new (value: string) => AddressLike) & {
+  fromScVal(v: xdr.ScVal): AddressLike;
 };
 
 type SimulateResponse = Awaited<ReturnType<rpc.Server["simulateTransaction"]>>;
@@ -120,7 +123,6 @@ function extractContractCode(tr: xdr.TransactionResult): number | null {
 interface ContractNameRecord {
   address: string;
   memo: string | null;
-  owner: string;
 }
 
 export class SideraClient {
@@ -153,8 +155,8 @@ export class SideraClient {
   // ------------------------------------------------------------------
 
   /**
-   * Resolve a name into a full payment destination: address, parsed memo
-   * hint, and owner. Accepts bare names or `name.sid` input.
+   * Resolve a name into a full payment destination: address and parsed
+   * memo hint. Accepts bare names or `name.sid` input.
    *
    * @throws `NameNotFoundError` when the name is not registered.
    */
@@ -175,7 +177,6 @@ export class SideraClient {
       fullName: `${name}.sid`,
       address: record.address,
       memo,
-      owner: record.owner,
     };
   }
 
@@ -363,8 +364,12 @@ function scValOptionString(value: string | undefined): xdr.ScVal {
 function scValToJs(v: xdr.ScVal): unknown {
   switch (v.switch().name) {
     case "scvString":
-    case "scvSymbol":
       return v.str().toString();
+    case "scvSymbol":
+      return v.sym().toString();
+    case "scvAddress":
+      // Addresses decode to their strkey string form (G…/C…/M…).
+      return AddressC.fromScVal(v).toString();
     case "scvBool":
       return v.b();
     case "scvU32":
@@ -388,9 +393,18 @@ function scValToJs(v: xdr.ScVal): unknown {
       const out: Record<string, unknown> = {};
       if (map != null) {
         for (const entry of map) {
-          const key = entry.key().str().toString();
+          // Soroban Rust maps use Symbol keys for structs/enums; keep a
+          // String-key fallback for robustness.
+          const k = entry.key();
+          const key =
+            k.switch().name === "scvSymbol" ? k.sym().toString() : k.str().toString();
           out[key] = scValToJs(entry.val());
         }
+      }
+      // Rust sum types arrive as `{ Tag: "Variant", val: payload }` —
+      // unwrap to the payload (e.g. `Resolution::Record { … }`).
+      if (out.Tag != null && "val" in out) {
+        return out.val;
       }
       return out;
     }

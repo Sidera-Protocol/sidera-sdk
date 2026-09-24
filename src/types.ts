@@ -57,8 +57,6 @@ export interface ResolutionResult {
   address: string;
   /** Parsed memo hint, ready to attach to a Stellar transaction. */
   memo: ParsedMemo | null;
-  /** Current owner of the name. */
-  owner: string;
 }
 
 /**
