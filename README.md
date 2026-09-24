@@ -3,6 +3,9 @@
 **TypeScript client for the Sidera Stellar Name Service — send payments to
 `alice.sid`, not to a checksum.**
 
+> 💠 Contribute via **Drips Wave** & **GrantFox** — see the labeled issue
+> ladder and `CONTRIBUTING.md`. Fork-first; PRs against `main`.
+
 Sidera maps human-readable names to Stellar addresses (G- and M-keys) with
 **memo hints**, so exchange payments stop getting lost and wallets stop
 asking users to paste 56 characters. This SDK is the resolution engine for
