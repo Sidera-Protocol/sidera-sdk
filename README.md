@@ -11,6 +11,12 @@ Sidera maps human-readable names to Stellar addresses (G- and M-keys) with
 asking users to paste 56 characters. This SDK is the resolution engine for
 wallets (Freighter, Albedo, …) and payment apps.
 
+## Project documentation
+
+See the [Sidera documentation hub](https://github.com/Sidera-Protocol/sidera-contracts/blob/main/docs/README.md)
+for the repository map, current testnet deployment, integration flow, and
+cross-repository contribution guidance.
+
 ## Installation
 
 ```bash
