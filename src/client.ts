@@ -2,8 +2,8 @@
  * SideraClient — the single entry point wallets and payment apps use to
  * talk to a deployed Sidera registry over Soroban RPC.
  *
- * Read calls (`resolve`, `ownerOf`, `exists`) simulate the invocation and
- * decode the result. Write calls (`register`, `setAddress`, `transfer`)
+ * Read calls (`resolve`, `ownerOf`, `exists`, `primaryName`) simulate the invocation and
+ * decode the result. Write calls (`register`, `setAddress`, `transfer`, `setPrimaryName`)
  * build, sign (via the configured signer), and submit real transactions.
  *
  * Type notes (verified against @stellar/stellar-sdk 13.x):
@@ -199,6 +199,15 @@ export class SideraClient {
     return present === true;
   }
 
+  /** Return the preferred display name for an address. */
+  async primaryName(address: string): Promise<string> {
+    const name = await this.callRead<string | null>("primary_name", [addressScVal(address)]);
+    if (name == null) {
+      throw errorFromCode(1, address);
+    }
+    return name;
+  }
+
   // ------------------------------------------------------------------
   // Write path
   // ------------------------------------------------------------------
@@ -261,6 +270,23 @@ export class SideraClient {
         scValOptionString(params.memo),
       ],
       caller,
+      name,
+      options,
+    );
+  }
+
+  /** Set the preferred display name for an address. The address must sign. */
+  async setPrimaryName(
+    address: string,
+    nameInput: string,
+    options: RpcTxOptions = {},
+  ): Promise<string> {
+    const name = normalizeName(nameInput);
+    assertValidName(name);
+    return this.submit(
+      "set_primary_name",
+      [addressScVal(address), scValString(name)],
+      address,
       name,
       options,
     );
