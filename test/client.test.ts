@@ -109,6 +109,20 @@ describe("parameter serialization", () => {
     expect(hf.args()[0].str().toString()).toBe("alice");
   });
 
+  it("serializes primaryName with an address argument", async () => {
+    const { client, server } = makeClient();
+    const simulate = server.simulateTransaction.mockResolvedValue({
+      result: { retval: xdr.ScVal.scvString("alice") },
+    });
+
+    await expect(client.primaryName(OWNER)).resolves.toBe("alice");
+
+    const tx = simulate.mock.calls[0][0];
+    const hf = tx.operations[0].func.value();
+    expect(hf.functionName().toString()).toBe("primary_name");
+    expect(Address.fromScVal(hf.args()[0]).toString()).toBe(OWNER);
+  });
+
   it("rejects invalid names client-side without an RPC round-trip", async () => {
     const { client, server } = makeClient();
     await expect(client.exists("-bad")).rejects.toBeInstanceOf(InvalidNameError);
@@ -141,6 +155,31 @@ describe("parameter serialization", () => {
     expect(hash).toBe("abc123");
     expect(getAccount).toHaveBeenCalledWith(OWNER);
   });
+
+  it("builds setPrimaryName with the address and normalized name", async () => {
+    const { server } = makeClient();
+    const getAccount = server.getAccount.mockResolvedValue({
+      sequenceNumber: () => "1",
+      accountId: () => OWNER,
+      incrementSequenceNumber: () => {},
+    });
+    const client = new SideraClient({
+      ...CONFIG,
+      signer: { signTx: async (txXdr) => txXdr },
+    });
+    (client as any).server.getAccount = getAccount;
+    (client as any).server.sendTransaction = server.sendTransaction.mockResolvedValue({
+      hash: "primary123",
+      status: "PENDING",
+    });
+
+    await expect(client.setPrimaryName(OWNER, "Alice.SID")).resolves.toBe("primary123");
+    const tx = (client as any).server.sendTransaction.mock.calls[0][0];
+    const hf = tx.operations[0].func.value();
+    expect(hf.functionName().toString()).toBe("set_primary_name");
+    expect(Address.fromScVal(hf.args()[0]).toString()).toBe(OWNER);
+    expect(hf.args()[1].str().toString()).toBe("alice");
+  });
 });
 
 describe("response decoding and error mapping", () => {
@@ -162,6 +201,15 @@ describe("response decoding and error mapping", () => {
     });
 
     await expect(client.resolve("taken")).rejects.toBeInstanceOf(NameTakenError);
+  });
+
+  it("maps missing primary names to NameNotFoundError", async () => {
+    const { client, server } = makeClient();
+    server.simulateTransaction.mockResolvedValue({
+      error: "Error(Contract, #1)",
+    });
+
+    await expect(client.primaryName(OWNER)).rejects.toBeInstanceOf(NameNotFoundError);
   });
 
   it("decodes a live-chain-shaped resolution record: address and parsed memo", async () => {

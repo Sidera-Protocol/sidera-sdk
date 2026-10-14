@@ -62,7 +62,8 @@ Wallets: feed `res.memo` straight into your payment builder —
 **If a memo hint is present, refusing to attach it should be a hard error in
 your send flow** — a memo-less payment to an exchange is a lost payment.
 
-Also available: `client.ownerOf(name)`, `client.exists(name)`.
+Also available: `client.ownerOf(name)`, `client.exists(name)`, and
+`client.primaryName(address)` for reverse resolution.
 
 ## Writing to the registry (transactions)
 
@@ -90,6 +91,9 @@ const hash = await client.register({
 
 // Re-point a name:
 await client.setAddress({ name: "alice", address: newAddress }, ownerAddress);
+
+// Set the wallet's preferred reverse-resolution name (address must sign):
+await client.setPrimaryName(ownerAddress, "alice");
 
 // Transfer ownership:
 await client.transfer({ name: "alice", from: ownerAddress, to: newOwner });
