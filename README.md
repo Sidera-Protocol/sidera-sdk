@@ -45,6 +45,20 @@ Network defaults:
 | testnet  | `https://soroban-testnet.stellar.org`    |
 | mainnet  | `https://soroban-rpc.stellar.org`        |
 
+## Verified testnet deployment
+
+The current reverse-resolution contract is deployed on Stellar testnet at:
+
+```text
+CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC
+```
+
+Explorer: <https://lab.stellar.org/r/testnet/contract/CCZJFYZSVMREA522JLNRBU4F4DRQFALDYM4JR7JBPNHY5NZOUWXWH7PC>
+
+The deployment was verified by resolving a registered name with its memo hint
+and reading the address's `primaryName`. The transaction-level receipt is
+maintained in the contracts repository.
+
 ## Resolving a name (reads)
 
 ```ts
