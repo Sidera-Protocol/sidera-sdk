@@ -194,6 +194,16 @@ describe("response decoding and error mapping", () => {
     await expect(client.resolve("ghost")).rejects.toBeInstanceOf(NameNotFoundError);
   });
 
+  it("names the looked-up name, not the entrypoint, in contract errors", async () => {
+    const { client, server } = makeClient();
+    server.simulateTransaction.mockResolvedValue({
+      error: "Error(Contract, #1)",
+    });
+
+    await expect(client.resolve("ghost.sid")).rejects.toThrow('Name "ghost" is not registered');
+    await expect(client.ownerOf("ghost")).rejects.toThrow('Name "ghost" is not registered');
+  });
+
   it("maps simulation error #2 to NameTakenError", async () => {
     const { client, server } = makeClient();
     server.simulateTransaction.mockResolvedValue({

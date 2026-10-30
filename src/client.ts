@@ -166,7 +166,7 @@ export class SideraClient {
 
     const record = await this.callRead<ContractNameRecord | null>("resolve", [
       scValString(name),
-    ]);
+    ], name);
     if (record == null) {
       throw errorFromCode(1, name);
     }
@@ -184,7 +184,7 @@ export class SideraClient {
   async ownerOf(nameInput: string): Promise<string> {
     const name = normalizeName(nameInput);
     assertValidName(name);
-    const owner = await this.callRead<string | null>("owner_of", [scValString(name)]);
+    const owner = await this.callRead<string | null>("owner_of", [scValString(name)], name);
     if (owner == null) {
       throw errorFromCode(1, name);
     }
@@ -195,13 +195,13 @@ export class SideraClient {
   async exists(nameInput: string): Promise<boolean> {
     const name = normalizeName(nameInput);
     assertValidName(name);
-    const present = await this.callRead<boolean>("exists", [scValString(name)]);
+    const present = await this.callRead<boolean>("exists", [scValString(name)], name);
     return present === true;
   }
 
   /** Return the preferred display name for an address. */
   async primaryName(address: string): Promise<string> {
-    const name = await this.callRead<string | null>("primary_name", [addressScVal(address)]);
+    const name = await this.callRead<string | null>("primary_name", [addressScVal(address)], address);
     if (name == null) {
       throw errorFromCode(1, address);
     }
@@ -296,8 +296,12 @@ export class SideraClient {
   // Plumbing
   // ------------------------------------------------------------------
 
-  /** Simulate a read-only contract invocation and decode its return value. */
-  private async callRead<T>(fn: string, args: xdr.ScVal[]): Promise<T> {
+  /**
+   * Simulate a read-only contract invocation and decode its return value.
+   * `subject` is the name (or address) the call is about, so contract errors
+   * name it rather than the entrypoint.
+   */
+  private async callRead<T>(fn: string, args: xdr.ScVal[], subject: string): Promise<T> {
     const contract = new Contract(this.contractId);
     // The simulation result depends only on the invocation, not the source,
     // so a throwaway account keeps reads signer- and sequence-free.
@@ -312,7 +316,7 @@ export class SideraClient {
 
     const sim: SimulateResponse = await this.server.simulateTransaction(tx);
     if ("error" in sim && sim.error != null) {
-      throw toContractError(sim.error, fn);
+      throw toContractError(sim.error, subject);
     }
     if (!("result" in sim) || sim.result?.retval == null) {
       throw new SideraError("EmptyResult", `No return value from "${fn}"`);
